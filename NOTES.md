@@ -14,7 +14,6 @@ The order of `/dev` is incrementing based in position in chassi and is decided d
 ```
 # camcontrol identify /dev/da4 | grep 'serial\ number' | cut -d" " -f 11
 ```
-Depends on `smartmontools` which is highly recommended to install anyway
 
 ## VMs and jails
 `vm-bhyve` + `iocage`
