@@ -24,7 +24,7 @@ Make sure to run with super user privileges
 
 
 ## Background
-The scripts derrived from reading the source of bhyve-vm and experimenting with TrueNAS which did not meet my needs. Although TrueNAS is great, it really is, it comes packed with alot of functionality, in wich 99% of them I dont use. Also it's, as intended, lacking the ability to modify and use the base OS to its full capacity.
+The scripts derrived from reading the source of bhyve-vm and experimenting with TrueNAS which did not meet my needs. Although TrueNAS is great, it really is, it comes packed with alot of functionality, in which 99% of them I dont use. Also it's, as intended, lacking the ability to modify and use the base OS to its full capacity.
 
 So, for some people, me for instance, pure FreeBSD gives more freedom to customize and really be in control to allow whatever I wish to run, with or without extra layers like jails or vms.
 
