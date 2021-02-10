@@ -114,9 +114,7 @@ disk::partition(){
         exit 1
     fi
 
-    # DEBUG!!!
-    # _physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
-    _physical_sector_size=512
+    _physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
 
     # Align 4096 on 512 disk is fine, other way around might cause issue, annoy the user anyway
     if [ "${SECTOR_SIZE}" -ne "${_physical_sector_size}" ]; then
