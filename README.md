@@ -84,23 +84,50 @@ This is BYOSAS - Bring Your Own Shares And Services.
 
 ```bash
 #!/bin/sh
-# If only works with bash, rewrite to sh which is more native
+zpool="pool"
+basepath="/dev/"
+dev_list="da1p1 da2p1 da3p1"
 
-# Copy-paste from https://blog.haraschak.com/from-dev-to-label/
+error=0
 
-zpool='pool'
-devices=(da12p1 da13p1 da14p1 da15p1 da16p1)
-
-read -s -p 'Decryption password: ' pass
+# Dont show password as its typed
+stty -echo
+printf "Password: "
+read pass
+stty echo
 echo
-for name in "${devices[@]}"; do
-    echo "Decrypting: $name"
-		echo -n "$pass" | geli attach -j - -k /root/geli.key "/dev/$name" || exit 1
+
+for dev in ${dev_list}; do
+    echo "Mounting: $dev"
+    echo -n "$pass" | geli attach -j - -k "/root/$zpool_$dev.key" "$basepath$dev" || exit 1
+    if [ ! -e "$basepath$dev" ]; then
+        echo "Could not attach $basepath$dev"
+        error=1
+    fi
 done
 
-sleep 2
+if [ $error -ne 0 ]; then
+    echo "Will not import pool because errors happened"
+    exit 1
+fi
 
-echo "Importing pool: $zpool"
-zpool import "$zpool"
-zpool status
+if [ $error -eq 0 ]; then
+    # Now, import it
+    echo "Importing: $zpool"
+    zpool import $zpool
+
+    # Start services
+    service rpcbind restart
+    service nfsd restart
+    service mountd restart
+
+    if [ $error -eq 0 ]; then
+        # Start services depending on our $zpool. Example:
+        iocage activate $zpool
+        iocage start my_encrypted_jail
+        # Default back to unencrypted pool
+        iocage activate unencrypted_pool
+    fi
+fi
+zpool status $zpool
 ```
