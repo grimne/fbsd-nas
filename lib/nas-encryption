@@ -2,6 +2,8 @@
 
 # Defauls
 _key_out=/root/geli/master.key
+
+
 encryption::init(){
 
     encryption::init::usage() { 

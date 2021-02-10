@@ -1,6 +1,6 @@
 #!/bin/sh
 
-
+# This is stupid...
 zpool::list(){
     zpool list
 }
@@ -73,15 +73,19 @@ zpool::create(){
     [ $? -eq 0 ] || util::err "Unable to create zpool ${_pool_name}"
 }
 
+
+# Needs implementation
 zpool::expand(){
     # nas zpool expand <name> -d "mirror /dev/da1 /dev/da2"
     # zpool add <name> mirror /dev/da1 /dev/da2 
 }
 
+
 zpool::destroy(){
     # nas zpool destroy <name>
     # zpool destroy [-f] <name>
 }
+
 
 zpool::replace() {
     # zpool offline [-t] pool device ...

@@ -58,6 +58,7 @@ disk::wipe(){
     dd if=/dev/zero of=${_disk} bs=1m count=2 > /dev/null 2>&1
     _size=$(diskinfo ${_disk} | cut -f 3)
     dd if=/dev/zero of=${_disk} bs=1m oseek=$((_size / MiB - 2)) > /dev/null 2>&1
+    
     # Wipe out the partition table by doing an additional iterate of create/destroy
     gpart create -s gpt $_disk > /dev/null 2>&1
     gpart destroy -F $_disk
@@ -183,9 +184,11 @@ disk::dummy_boot_code(){
         exit 1
     fi
 
+    # Untested
     util::confirm "Are you sure you want to install a dummy boot block so system gives meaningful message if wrongly booting from $_disk?" || exit 0
     gpart bootcode -b /boot/pmbr $_disk
 }
+
 
 disk::hotswap(){
     disk::hotswap::usage() { 
@@ -247,6 +250,7 @@ disk::hotswap(){
     echo "disk::hotswap::tur > /dev/null 2>&1"
     [ $? -eq 0 ] || util::err "Failed to send SCSI test unit ready ${_disk}"
 }
+
 
 disk::label(){
     disk::label::usage() { 

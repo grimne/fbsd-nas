@@ -71,6 +71,7 @@ cmd::parse_encrypt(){
     esac
 }
 
+
 cmd::parse_zpool(){
     local _cmd
 
