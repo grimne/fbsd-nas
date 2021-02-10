@@ -1,0 +1,328 @@
+#!/bin/sh
+
+# Constants for base 10 and base 2 units
+: ${kB:=$((1000))}      ${kiB:=$((1024))};       readonly kB kiB
+: ${MB:=$((1000 * kB))} ${MiB:=$((1024 * kiB))}; readonly MB MiB
+: ${GB:=$((1000 * MB))} ${GiB:=$((1024 * MiB))}; readonly GB GiB
+: ${TB:=$((1000 * GB))} ${TiB:=$((1024 * GiB))}; readonly TB TiB
+
+
+disk::list(){
+    geom disk list
+}
+
+
+disk::wipe(){
+    disk::wipe::usage() {
+        echo "Usage: $0 disk wipe -d </dev/diskN>" 1>&2
+        exit 1 
+    }
+
+    if [ $# == 0 ]; then
+        disk::wipe::usage
+    fi
+
+    while getopts ":d:h" opt
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            h ) disk::wipe::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+    
+    # Pre-checks
+    if [ ! $_disk ]; then
+        util::err "No disk specified: $_disk"
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]
+    then
+        util::err "No such device: $_disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    util::confirm "Are you sure you want to completely wipe $_disk?" || exit 0
+
+    # Dont print the error message gpart gives if no partition is present
+    gpart destroy -F $_disk > /dev/null 2>&1
+    dd if=/dev/zero of=${_disk} bs=1m count=2 > /dev/null 2>&1
+    _size=$(diskinfo ${_disk} | cut -f 3)
+    dd if=/dev/zero of=${_disk} bs=1m oseek=$((_size / MiB - 2)) > /dev/null 2>&1
+    # Wipe out the partition table by doing an additional iterate of create/destroy
+    gpart create -s gpt $_disk > /dev/null 2>&1
+    gpart destroy -F $_disk
+}
+
+
+disk::partition(){
+    # Defaults
+    SECTOR_SIZE=4096
+    SWAP_GB=0 
+
+    disk::partition::usage() { 
+        echo "Usage: $0 disk partition -d </dev/diskN> [-s <data size>] [-a <4096|512>]" 1>&2
+        echo "    -d Full path to targeted disk. Required" 1>&2
+        echo "    -a Sector size of target. 512 or 4096. Defaults to 4096" 1>&2
+        echo "    -s Specify data partition size. Use SI units: k, M, G, T" 1>&2
+        exit 1 
+    }
+
+    while getopts ":d:a:s:h" opt # Its cool with a DASH!
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            a ) SECTOR_SIZE=$OPTARG ;;
+            s ) DATA_SIZE=$OPTARG ;;
+            h ) disk::partition::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+
+    # Pre-checks
+    if [ ! $_disk ]; then
+        disk::partition::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]; then
+        echo "No such device: $_disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+
+    if ! { [ "$SECTOR_SIZE" = 512 ] || [ "$SECTOR_SIZE" = 4096 ]; }; then
+        echo "$SECTOR_SIZE is not a valid sector size, must be 512 or 4096"
+        exit 1
+    fi
+
+    # DEBUG!!!
+    # _physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
+    _physical_sector_size=512
+
+    # Align 4096 on 512 disk is fine, other way around might cause issue, annoy the user anyway
+    if [ "${SECTOR_SIZE}" -ne "${_physical_sector_size}" ]; then
+        util::warn "Disk is reporting physical sector size $_physical_sector_size but you are about to use $SECTOR_SIZE"
+        util::confirm "Continue anyway?" || exit 0
+    fi
+
+    # Round ZFS partition size down to a multiple of 16 MiB (2^24),
+    # leaving units in MiB (2^20) and leave 16 MiB at the end
+    _zfs_size=$(diskinfo ${_disk} | cut -f 3)
+    _zfs_size="$(( (( (_zfs_size >> 24) << 4 )) - 16 ))M"
+    util::info "Maximum recommended data partition size: $_zfs_size"
+
+    util::confirm "Are you sure you want to write partition table to $_disk?" || exit 0
+
+    gpart create -s gpt ${_disk}
+
+    if [ ! -z $DATA_SIZE ]; then
+        # Use Specific size
+        _zfs_size="-s $DATA_SIZE"
+        gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk}
+        [ $? -eq 0 ] || gpart show $_disk && util::err "Could not partition correctly. Wrong specified size? Please review table above"
+    else
+        # Use entire disk
+        _zfs_size="-s $_zfs_size"
+        gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk}
+    fi
+
+    echo "New disk partition layout:"
+    gpart show $_disk
+}
+
+
+disk::dummy_boot_code(){
+    disk::dummy_boot_code::usage() { 
+        echo "Usage: $0 disk dummyboot -d </dev/diskN>" 1>&2
+        exit 1 
+    }
+
+    while getopts ":d:h" opt
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            h ) disk::dummy_boot_code::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+
+    # Pre-checks
+    if [ ! $_disk ]; then
+        disk::dummy_boot_code::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]; then
+        echo "No such device: $_disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    util::confirm "Are you sure you want to install a dummy boot block so system gives meaningful message if wrongly booting from $_disk?" || exit 0
+    gpart bootcode -b /boot/pmbr $_disk
+}
+
+disk::hotswap(){
+    disk::hotswap::usage() { 
+        echo "Usage: $0 disk hotswap -d </dev/diskN>" 1>&2
+        exit 1 
+    }
+    
+    disk::hotswap::stop() { 
+        camcontrol stop ${_disk} -v
+    }
+
+    disk::hotswap::start() { 
+        camcontrol start ${_disk} -v
+    }
+
+    disk::hotswap::tur() { 
+        camcontrol tur ${_disk} -v
+    }
+
+
+    while getopts ":d:h" opt
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            h ) disk::hotswap::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+
+    # Pre-checks
+    if [ ! $_disk ]; then
+        disk::hotswap::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]; then
+        echo "No such device: $_disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    util::confirm "Stop $_disk?" || exit 0
+    echo "disk::hotswap::stop > /dev/null 2>&1"
+    [ $? -eq 0 ] || util::err "Failed to stop ${_disk}"
+
+    echo "It's now safe to carefully replace $_disk"
+    util::confirm "Start $_disk?" || exit 0
+    echo "disk::hotswap::start > /dev/null 2>&1"
+    [ $? -eq 0 ] || util::err "Failed to start ${_disk}"
+
+    echo "disk::hotswap::tur > /dev/null 2>&1"
+    [ $? -eq 0 ] || util::err "Failed to send SCSI test unit ready ${_disk}"
+}
+
+disk::label(){
+    disk::label::usage() { 
+        echo "Usage: $0 disk label [-s][-u][-c] -d </dev/diskNpY>" 1>&2
+        exit 1 
+    }
+
+    _i="0"
+
+    while getopts ":d:usc:h" opt # Everybody needs to shower
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            u ) _uuid="yes" && _i=$((_i+1)) ;;
+            s ) _sn="yes" && _i=$((_i+1)) ;;
+            c ) _custom=$OPTARG && _i=$((_i+1)) ;;
+            h ) disk::label::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+    # Pre-checks
+    if [ "${_i}" -gt 1 ]; then 
+        util::err "UUID, Serial Number and Custom label are mutually exclusive"
+    elif [ "${_i}" -eq 0 ]; then
+        util::err "Specify at least one type of label, -u(uid), -s(erial number) or -c(ustom)"
+    fi
+
+    if [ ! $_disk ]; then
+        disk::label::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]; then
+        echo "No such device: $_disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep 'p[0-9]\+$') ]; then
+        echo "You must include part/partition. IE /dev/ad4p2"
+        exit 1
+    fi
+
+    _index=$(basename $_disk | sed -n -e 's/^.*p//p')
+
+    if [ -n "${_uuid}" ]; then
+        _disk=$(basename $_disk)
+        _label=$(gpart list | grep -A 20 ${_disk} | grep rawuuid | sed -n 1p | awk '{print $2}')
+        [ -z $_label ] && util::err "Failed to fetch UUID from ${_disk}"
+    fi
+
+    if [ -n "${_sn}" ]; then
+        # "diskinfo -s $_disk" might not according to man-page always return serial number:
+        # -s Return the disk ident, usually the serial number
+        _label=$(camcontrol identify ${_disk} | grep 'serial\ number' | cut -d" " -f 11 2>&1)
+        [ $? -eq 0 ] || [ -z $_label ] && util::err "Failed to fetch serial number from ${_disk}"
+    fi
+
+    if [ -n "${_custom}" ]; then
+        _label=$_custom
+    fi
+
+    # Need dev, not part
+    _dev=$(basename $_disk | sed 's/p[0-9]//g')
+    
+    util::confirm "Write label "${_label}" to "${_disk}"?" || exit 0
+    gpart modify -i "${_index}" -l "${_label}" "${_dev}" 
+
+}

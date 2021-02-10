@@ -1,0 +1,165 @@
+#!/bin/sh
+
+# Defauls
+_key_out=/root/geli/master.key
+encryption::init(){
+
+    encryption::init::usage() { 
+        echo "Usage: $0 encrypt init -o </path/to/geli.key> (Default: $_key_out)" 1>&2
+        exit 1 
+    }
+
+    while getopts ":o:h" opt
+    do
+        case $opt in
+            o ) _key_out=$OPTARG ;;
+            h ) encryption::init::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+    # Pre-checks
+    if [ ! $_key_out ]; then
+        encryption::init::usage
+        exit 1
+    fi
+
+    if [ -f $_key_out ]
+    then
+        echo "File already exists. Aborting."
+        exit 1
+    fi
+
+    util::confirm "Do you want to create a new GELI master key stored in $_key_out?" || exit 0
+
+    mkdir -p "${_key_out%/*}"
+    touch ${_key_out}
+    dd if=/dev/random of=${_key_out} bs=64 count=1 > /dev/null 2>&1
+    [ $? -eq 0 ] || util::err "Could not generate key ${_key_out}"
+    chmod 400 ${_key_out}
+    chmod 700 "${_key_out%/*}"
+    echo
+
+    md5 $_key_out
+    echo
+    echo "NOTICE: Store $_key_out in a safe location! Without it your data is lost! (unless you're Dade Murphy)"
+
+}
+
+
+encryption::disk(){
+    # Defaults
+    _master_key=$_key_out
+    encryption::disk::usage() { 
+        echo "Usage: $0 encrypt disk -d </dev/diskN> -k </path/to/geli/master.key> (Default: $_key_out)" 1>&2
+        exit 1 
+    }
+
+    while getopts ":d:k:h" opt
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            k ) _master_key=$OPTARG ;;
+            h ) encryption::disk::usage ;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+    # Pre-checks
+    if [ ! $_master_key ]; then
+        encryption::disk::usage
+        exit 1
+    fi
+
+    if [ ! -f $_master_key ]
+    then
+        echo "No such file: $_master_key"
+        exit 1
+    fi
+
+    if [ ! $_disk ]; then
+        echo "No disk specified"
+        encryption::disk::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]
+    then
+        echo "No such device: $_disk"
+        encryption::disk::usage
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    util::confirm "GELI encrypt $_disk?" || exit 0
+    echo "Remember the passphrase entered (twice) below to be able to decrypt your data!"
+    geli init -e AES-XTS -s 4096 -l 256 -B none -K $_master_key $_disk > /dev/null 2>&1
+    [ $? -eq 0 ] || util::err "Could not init geli on $_disk ${_name}"
+
+}
+
+
+encryption::attach(){
+    # Defaults
+    _master_key=$_key_out
+
+    encryption::attach::usage() { 
+        echo "Usage: $0 encrypt attach -d </dev/diskN.eli> -k </path/to/geli/master.key>" 1>&2
+        exit 1 
+    }
+
+    while getopts ":d:k:h" opt
+    do
+        case $opt in
+            d ) _disk=$OPTARG ;;
+            k ) _master_key=$OPTARG ;;
+            h ) encryption::attach::usage;;
+            \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
+            exit ;;
+            : ) echo "Option -$OPTARG requires an argument" >&2
+            exit ;;
+        esac
+    done
+
+    # Pre-checks
+    if [ ! $_master_key ]; then
+        encryption::attach::usage
+        exit 1
+    fi
+
+    if [ ! -f $_master_key ]
+    then
+        util::err "No such file: $_master_key"
+        exit 1
+    fi
+
+    if [ ! $_disk ]; then
+        encryption::attach::usage
+        exit 1
+    fi
+
+    if [ ! -e $_disk ]
+    then
+        echo "No such device: $_disk"
+        encryption::attach::usage
+        exit 1
+    fi
+
+    if [ ! $(echo $_disk | grep dev) ]; then
+        echo "Enter full path to your disk"
+        exit 1
+    fi
+
+    geli attach -k $_master_key $_disk > /dev/null 2>&1
+    [ $? -eq 0 ] || util::err "Could not attach encrypted ${_disk}"
+}

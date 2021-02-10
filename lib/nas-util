@@ -1,0 +1,61 @@
+#!/bin/sh
+
+util::version(){
+    echo "fbsd-nas: FreeBSD ZFS and disk management v${VERSION}"
+}
+
+util::usage(){
+    util::version
+    cat << EOT
+Usage: nas ...
+    version
+    help
+    usage
+
+    disk list
+    disk wipe -d </dev/disk>
+    disk partition -d </dev/disk> [-a <4096|512>] [-s <Swap size in GB>]
+    disk label [-s][-u][-c] -d </dev/diskNpY>
+    disk dummyboot -d </dev/disk>
+    disk hotswap -d </dev/disk>
+    encrypt init -o /path/to/master.key
+    encrypt disk -d </dev/disk> -k /path/to/master.key
+    encrypt attach -d </dev/disk> -k /path/to/master.key
+    zpool list
+    zpool create -n <name> [-t <type>] -d <"[type] /dev/disk1 [diskN ...]">
+    zfs list
+    zfs create [-r refquota] [-q quota]
+
+EOT
+    exit 1
+}
+
+util::err(){
+    echo "${0}: ERROR: $1" >&2
+    exit 1
+}
+
+util::err_inline(){
+    echo "  ! $1"
+    exit 1
+}
+
+util::warn(){
+    echo "${0}: WARNING: $1" >&2
+}
+
+util::info(){
+    echo "${0}: INFO: $1" >&2
+}
+
+util::confirm(){
+    local _msg="$1"
+    local _resp
+
+    while read -p "${_msg} (y/n)? " _resp; do
+        case "${_resp}" in
+            y*) return 0 ;;
+            n*) return 1 ;;
+        esac
+    done
+}
