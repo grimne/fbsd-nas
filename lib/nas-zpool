@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This is stupid...
+# This is quite stupid...
 # ToDo: Make sure labelclear is run for each device
 # ToDo: Add confirmation with the "-n" dryrun output
 # ToDo: Might do this, if using label, get the dev IDs ie /dev/da4p2 just for confirmation.
@@ -15,6 +15,8 @@ zpool::create(){
     _type=stripe
 
     zpool::create::usage() {
+        # Replace with following syntax
+        # echo "Usage: sh $0 -n <newpoolname> [-t <stripe|mirror|raidz1|raidz2|raidz3>] </dev/device>" 1>&2
         echo "Usage: sh $0 -n <newpoolname> -d </dev/device> [-t <stripe|mirror|raidz1|raidz2|raidz3>]" 1>&2
         echo
         echo "    -n Name of new pool" 1>&2

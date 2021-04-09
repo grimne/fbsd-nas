@@ -1,9 +1,5 @@
 #!/bin/sh
 
-# ToDo: Doing "nas disk wipe /dev/" is a much more natural syntax, remove "-n" option
-# ToDo: Speaking of which, make sure to loop through the disks so multiple disks can be chosen simultaneously
-# ToDo: Add "recommended" and/or automatic tasks to apply to disk which wipes, partition and labels partition #1 with serial number
-# ToDo: add --short option for "nas disk list". Its just overwhelming
 
 # Constants for base 10 and base 2 units
 : ${kB:=$((1000))}      ${kiB:=$((1024))};       readonly kB kiB
@@ -13,11 +9,14 @@
 
 
 disk::list(){
+# ToDo: add --short option for "nas disk list". Its just overwhelming
     geom disk list
 }
 
 
 disk::wipe(){
+    # ToDo (maybe): Add recommended/automatic tasks to apply to disk which wipes, partition and labels partition #1 with serial number
+    # ToDo: Support multiple devices
     disk::wipe::usage() {
         echo "Usage: $0 disk wipe -d </dev/diskN>" 1>&2
         exit 1 
@@ -41,7 +40,7 @@ disk::wipe(){
     
     # Pre-checks
     if [ ! $_disk ]; then
-        util::err "No disk specified: $_disk"
+        util::err "No disk specified: $_disk" # ToDo: WT*?!
         exit 1
     fi
 
@@ -72,7 +71,7 @@ disk::wipe(){
 disk::partition(){
     # Defaults
     SECTOR_SIZE=4096
-    SWAP_GB=0 
+    SWAP_GB=0 # ToDo: Delete this
 
     disk::partition::usage() { 
         echo "Usage: $0 disk partition -d </dev/diskN> [-s <data size>] [-a <4096|512>]" 1>&2
@@ -138,7 +137,7 @@ disk::partition(){
 
     gpart create -s gpt ${_disk}
 
-    if [ ! -z $DATA_SIZE ]; then
+    if [ ! -z $DATA_SIZE ]; then # ToDo: Investigate why this throws shell syntax error
         # Use Specific size
         _zfs_size="-s $DATA_SIZE"
         gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk}
@@ -197,6 +196,7 @@ disk::dummy_boot_code(){
 
 disk::hotswap(){
     disk::hotswap::usage() { 
+        # ToDo: Skip the -d option, but only allow one arg
         echo "Usage: $0 disk hotswap -d </dev/diskN>" 1>&2
         exit 1 
     }
@@ -260,6 +260,7 @@ disk::hotswap(){
 disk::label(){
     disk::label::usage() { 
     # ToDo: Add check if "sysctl -n kern.geom.label.disk_ident.enable" is 1, then abort
+    # ToDo: Add support for multiple devices and skip the -d option
         echo "Usage: $0 disk label [-s][-u][-c] -d </dev/diskNpY>" 1>&2
         exit 1 
     }
