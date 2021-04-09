@@ -25,7 +25,7 @@ crw-r-----  1 root  operator  0x71 Mar 23 16:36 DISK-BHYVE-abc-123-xyz1p1
 crw-r-----  1 root  operator  0x62 Mar 23 16:36 DISK-BHYVE-abc-123-xyz2
 crw-r-----  1 root  operator  0x7a Mar 23 16:36 DISK-BHYVE-abc-123-xyz3
 ```
-Another caveat is that `diskinfo -s /dev/da4` *usually* (not always) return the serial number as identifyer.
+A caveat is that `diskinfo -s /dev/da4` *usually* return the serial number as identifyer. For simplicity, using `kern.geom.label.disk_ident.enable="YES"` is not a bad idea, quite the oposite, you get much for free. As the example above, it shows both the disk and the partition which makes identification alot easier. Though, if diskinfo does *not* identify disk with serial number, or if you simply want to, you can use fbsd-nas to manually label the partition.
 
 ## VMs and jails
 `vm-bhyve` + `iocage`
