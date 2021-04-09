@@ -84,13 +84,21 @@ This is BYOSAS - Bring Your Own Shares And Services.
 
 ```bash
 #!/bin/sh
+<<<<<<< HEAD
 # If only works with bash, rewrite to sh which is more native
+=======
+zpool="pool"
+key="/root/geli/$zpool.key"
+dev_list="/dev/da1p1 /dev/da2p1 /dev/da3p1"
+
+>>>>>>> 30665e7... Make code uglier but it looks cooler while run
 
 # Copy-paste from https://blog.haraschak.com/from-dev-to-label/
 
 zpool='pool'
 devices=(da12p1 da13p1 da14p1 da15p1 da16p1)
 
+<<<<<<< HEAD
 read -s -p 'Decryption password: ' pass
 echo
 for name in "${devices[@]}"; do
@@ -103,4 +111,49 @@ sleep 2
 echo "Importing pool: $zpool"
 zpool import "$zpool"
 zpool status
+=======
+for dev in ${dev_list}; do
+    printf "Mounting $dev."
+    printf "." ; echo -n "$pass" | geli attach -j - -k "$key" "$dev" || exit 1
+    if [ $? -eq 0 ]; then
+        printf ".done \n"
+    else
+        error=1
+        printf ".failed! \n"
+    fi
+done
+
+if [ $error -ne 0 ]; then
+    echo "Could not geli attach"
+    error=1
+    exit 1
+fi
+
+
+if [ $error -ne 0 ]; then
+    echo "Will not import pool because errors happened"
+    exit 1
+fi
+
+if [ $error -eq 0 ]; then
+    # Now, import it
+    echo "Importing: $zpool"
+    zpool import $zpool
+
+    # Start services
+    service rpcbind restart
+    service nfsd restart
+    service mountd restart
+
+    if [ $error -eq 0 ]; then
+        # Start services depending on our $zpool. Example:
+        iocage activate $zpool
+        iocage start my_encrypted_jail
+        # Default back to unencrypted pool
+        iocage activate unencrypted_pool
+    fi
+fi
+zpool list $zpool
+zpool status $zpool
+>>>>>>> 30665e7... Make code uglier but it looks cooler while run
 ```
