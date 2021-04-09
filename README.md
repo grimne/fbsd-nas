@@ -84,34 +84,20 @@ This is BYOSAS - Bring Your Own Shares And Services.
 
 ```bash
 #!/bin/sh
-<<<<<<< HEAD
-# If only works with bash, rewrite to sh which is more native
-=======
 zpool="pool"
 key="/root/geli/$zpool.key"
 dev_list="/dev/da1p1 /dev/da2p1 /dev/da3p1"
 
->>>>>>> 30665e7... Make code uglier but it looks cooler while run
 
-# Copy-paste from https://blog.haraschak.com/from-dev-to-label/
+error=0
 
-zpool='pool'
-devices=(da12p1 da13p1 da14p1 da15p1 da16p1)
-
-<<<<<<< HEAD
-read -s -p 'Decryption password: ' pass
+# Dont show password as its typed
+stty -echo
+printf "Password: "
+read pass
+stty echo
 echo
-for name in "${devices[@]}"; do
-    echo "Decrypting: $name"
-		echo -n "$pass" | geli attach -j - -k /root/geli.key "/dev/$name" || exit 1
-done
 
-sleep 2
-
-echo "Importing pool: $zpool"
-zpool import "$zpool"
-zpool status
-=======
 for dev in ${dev_list}; do
     printf "Mounting $dev."
     printf "." ; echo -n "$pass" | geli attach -j - -k "$key" "$dev" || exit 1
@@ -155,5 +141,4 @@ if [ $error -eq 0 ]; then
 fi
 zpool list $zpool
 zpool status $zpool
->>>>>>> 30665e7... Make code uglier but it looks cooler while run
 ```
