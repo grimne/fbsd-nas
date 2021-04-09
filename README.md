@@ -85,8 +85,9 @@ This is BYOSAS - Bring Your Own Shares And Services.
 ```bash
 #!/bin/sh
 zpool="pool"
-basepath="/dev/"
-dev_list="da1p1 da2p1 da3p1"
+key="/root/geli/$zpool.key"
+dev_list="/dev/da1p1 /dev/da2p1 /dev/da3p1"
+
 
 error=0
 
@@ -98,13 +99,22 @@ stty echo
 echo
 
 for dev in ${dev_list}; do
-    echo "Mounting: $dev"
-    echo -n "$pass" | geli attach -j - -k "/root/$zpool_$dev.key" "$basepath$dev" || exit 1
-    if [ ! -e "$basepath$dev" ]; then
-        echo "Could not attach $basepath$dev"
+    printf "Mounting $dev."
+    printf "." ; echo -n "$pass" | geli attach -j - -k "$key" "$dev" || exit 1
+    if [ $? -eq 0 ]; then
+        printf ".done \n"
+    else
         error=1
+        printf ".failed! \n"
     fi
 done
+
+if [ $error -ne 0 ]; then
+    echo "Could not geli attach"
+    error=1
+    exit 1
+fi
+
 
 if [ $error -ne 0 ]; then
     echo "Will not import pool because errors happened"
@@ -129,5 +139,6 @@ if [ $error -eq 0 ]; then
         iocage activate unencrypted_pool
     fi
 fi
+zpool list $zpool
 zpool status $zpool
 ```
