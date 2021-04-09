@@ -159,7 +159,7 @@ disk::partition(){
 
         gpart create -s gpt ${_disk} > /dev/null 2>&1
         printf "."
-        if [ ! -z "${DATA_SIZE}" ]; then # ToDo: Investigate why this throws shell syntax error
+        if [ ! -z "${DATA_SIZE}" ]; then
             # Use Specific size
             _zfs_size="-s $DATA_SIZE"
             printf "."
