@@ -1,6 +1,10 @@
 #!/bin/sh
 
 # This is stupid...
+# ToDo: Make sure labelclear is run for each device
+# ToDo: Add confirmation with the "-n" dryrun output
+# ToDo: Might do this, if using label, get the dev IDs ie /dev/da4p2 just for confirmation.
+
 zpool::list(){
     zpool list
 }

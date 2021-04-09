@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# ToDo: Fix bug where "/usr/local/bin/nas: ERROR: unknown command ''. please run 'nas usage'" is showed, for instance: nas disk help
+
 CMD_VALID_LIST="disk,encrypt,zpool,zfs"
 CMD_VALID_LIST="${CMD_VALID_LIST},version,help,usage"
 
@@ -51,7 +53,7 @@ cmd::parse_disk(){
         label)      disk::label "$@" ;;
         dummyboot)  disk::dummy_boot_code "$@" ;;
         hotswap)    disk::hotswap "$@" ;;
-        *)          util::err "unknown command '${_user_cmd}'. please run 'nas usage'" ;;
+        *)          util::err "unknown command '${_user_cmd}'. please run 'nas disk usage'" ;;
     esac
 }
 
@@ -64,10 +66,12 @@ cmd::parse_encrypt(){
     shift
 
     case "${_cmd}" in
+        help)   encryption::usage ;;
+        usage)  encryption::usage ;;
         init)   encryption::init "$@" ;;
         disk)   encryption::disk "$@" ;;
         attach) encryption::attach "$@" ;;
-        *)      util::err "unknown command '${_user_cmd}'. please run 'nas usage'" ;;
+        *)      util::err "unknown command '${_user_cmd}'. please run 'nas encrypt usage'" ;;
     esac
 }
 
@@ -80,9 +84,11 @@ cmd::parse_zpool(){
     shift
 
     case "${_cmd}" in
+        help)   zpool::usage ;;
+        usage)  zpool::usage ;;
         list)   zpool::list ;;
         create) zpool::create "$@" ;;
-        *)      util::err "unknown command '${_user_cmd}'. please run 'nas usage'" ;;
+        *)      util::err "unknown command '${_user_cmd}'. please run 'nas zpool usage'" ;;
     esac
 }
 

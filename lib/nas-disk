@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# ToDo: Doing "nas disk wipe /dev/" is a much more natural syntax, remove "-n" option
+# ToDo: Speaking of which, make sure to loop through the disks so multiple disks can be chosen simultaneously
+# ToDo: Add "recommended" and/or automatic tasks to apply to disk which wipes, partition and labels partition #1 with serial number
+# ToDo: add --short option for "nas disk list". Its just overwhelming
+
 # Constants for base 10 and base 2 units
 : ${kB:=$((1000))}      ${kiB:=$((1024))};       readonly kB kiB
 : ${MB:=$((1000 * kB))} ${MiB:=$((1024 * kiB))}; readonly MB MiB
@@ -58,7 +63,6 @@ disk::wipe(){
     dd if=/dev/zero of=${_disk} bs=1m count=2 > /dev/null 2>&1
     _size=$(diskinfo ${_disk} | cut -f 3)
     dd if=/dev/zero of=${_disk} bs=1m oseek=$((_size / MiB - 2)) > /dev/null 2>&1
-    
     # Wipe out the partition table by doing an additional iterate of create/destroy
     gpart create -s gpt $_disk > /dev/null 2>&1
     gpart destroy -F $_disk
@@ -114,6 +118,7 @@ disk::partition(){
         echo "$SECTOR_SIZE is not a valid sector size, must be 512 or 4096"
         exit 1
     fi
+
 
     _physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
 
@@ -254,6 +259,7 @@ disk::hotswap(){
 
 disk::label(){
     disk::label::usage() { 
+    # ToDo: Add check if "sysctl -n kern.geom.label.disk_ident.enable" is 1, then abort
         echo "Usage: $0 disk label [-s][-u][-c] -d </dev/diskNpY>" 1>&2
         exit 1 
     }
