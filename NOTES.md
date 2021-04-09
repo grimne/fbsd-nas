@@ -9,7 +9,6 @@ Or, use this script: https://github.com/Spearfoot/disk-burnin-and-testing
 ## ZFS on raw or gpart
 Good question...
 
-## Disk labeling
 ## Disk and partition labeling
 The order of `/dev` is incrementing based in position in chassi and is decided during boot. Adding a new disk may mess up the order after reboot. Label the disks with serial number since its already written on the disk and made easy to label the tray. It provides a good overview of what disk is the faulty one and provides simplicity for importing regardless of `/dev` order.
 ```
