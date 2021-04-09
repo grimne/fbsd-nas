@@ -8,6 +8,9 @@ Or, use this script: https://github.com/Spearfoot/disk-burnin-and-testing
 
 ## ZFS on raw or gpart
 Good question...
+Its not bad to use ZFS on raw, though, in a couple of years when you need to replace a failing disk, the new disk might have the same size according to the manufacturer but it still differentiate a *very* small amount. If you're unlucky and the new disk hold slightly less space, you cannot use it. The replacement needs to hold more or equal amount of storage. Since a disk has already failed, you can be in a real hurry to replace it...
+
+Using partitions with specified size, you can get rid of this problem with the small side-effect that you loose a couple of MiB of storage.
 
 ## Disk and partition labeling
 The order of `/dev` is incrementing based in position in chassi and is decided during boot. Adding a new disk may mess up the order after reboot. Label the disks with serial number since its already written on the disk and made easy to label the tray. It provides a good overview of what disk is the faulty one and provides simplicity for importing regardless of `/dev` order.
