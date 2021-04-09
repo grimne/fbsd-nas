@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# ToDo (maybe): Add recommended/automatic tasks to apply to disk which wipes, partition and labels partition #1 with serial number
+
 
 # Constants for base 10 and base 2 units
 : ${kB:=$((1000))}      ${kiB:=$((1024))};       readonly kB kiB
@@ -14,22 +16,34 @@ disk::list(){
 }
 
 
+disk::wipe::target(){
+    local _target
+    _target=$1
+    printf "Wiping $_target"
+    # Dont print the error message gpart gives if no partition is present
+    gpart destroy -F $_target > /dev/null 2>&1
+    printf "."
+    dd if=/dev/zero of=${_target} bs=1m count=2 > /dev/null 2>&1
+    printf "."
+    _size=$(diskinfo ${_target} | cut -f 3)
+    dd if=/dev/zero of=${_target} bs=1m oseek=$((_size / MiB - 2)) > /dev/null 2>&1
+    printf "."
+    # Wipe out the partition table by doing an additional iterate of create/destroy
+    gpart create -s gpt $_target > /dev/null 2>&1
+    printf "."
+    gpart destroy -F $_target
+}
+
+
 disk::wipe(){
-    # ToDo (maybe): Add recommended/automatic tasks to apply to disk which wipes, partition and labels partition #1 with serial number
-    # ToDo: Support multiple devices
     disk::wipe::usage() {
-        echo "Usage: $0 disk wipe -d </dev/diskN>" 1>&2
+        echo "Usage: $0 disk wipe /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         exit 1 
     }
 
-    if [ $# == 0 ]; then
-        disk::wipe::usage
-    fi
-
-    while getopts ":d:h" opt
+    while getopts "h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
             h ) disk::wipe::usage ;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
             exit ;;
@@ -37,54 +51,53 @@ disk::wipe(){
             exit ;;
         esac
     done
-    
+
+    shift $((OPTIND - 1))
+    _devlist=$@
+
     # Pre-checks
-    if [ ! $_disk ]; then
-        util::err "No disk specified: $_disk" # ToDo: WT*?!
+    if [ ! "${_devlist}" ]; then
+        util::err "No disk(s) specified"
+        disk::wipe::usage
         exit 1
     fi
 
-    if [ ! -e $_disk ]
-    then
-        util::err "No such device: $_disk"
-        exit 1
-    fi
+    for _disk in ${_devlist}; do
+        if [ ! -e $_disk ]
+        then
+            util::err "No such device: $_disk"
+            exit 1
+        fi
 
-    if [ ! $(echo $_disk | grep dev) ]; then
-        echo "Enter full path to your disk"
-        exit 1
-    fi
+        if [ ! $(echo $_disk | grep dev) ]; then
+            echo "Enter full path to your disk"
+            exit 1
+        fi
+    done
 
-    util::confirm "Are you sure you want to completely wipe $_disk?" || exit 0
+    util::confirm "Are you sure you want to completely wipe $_devlist?" || exit 0
 
-    # Dont print the error message gpart gives if no partition is present
-    gpart destroy -F $_disk > /dev/null 2>&1
-    dd if=/dev/zero of=${_disk} bs=1m count=2 > /dev/null 2>&1
-    _size=$(diskinfo ${_disk} | cut -f 3)
-    dd if=/dev/zero of=${_disk} bs=1m oseek=$((_size / MiB - 2)) > /dev/null 2>&1
-    # Wipe out the partition table by doing an additional iterate of create/destroy
-    gpart create -s gpt $_disk > /dev/null 2>&1
-    gpart destroy -F $_disk
+    for _disk in ${_devlist}; do
+        disk::wipe::target $_disk
+    done
+    
 }
 
 
 disk::partition(){
     # Defaults
     SECTOR_SIZE=4096
-    SWAP_GB=0 # ToDo: Delete this
 
     disk::partition::usage() { 
-        echo "Usage: $0 disk partition -d </dev/diskN> [-s <data size>] [-a <4096|512>]" 1>&2
-        echo "    -d Full path to targeted disk. Required" 1>&2
+        echo "Usage: $0 disk partition [-s <data size>] [-a <4096|512>] /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         echo "    -a Sector size of target. 512 or 4096. Defaults to 4096" 1>&2
-        echo "    -s Specify data partition size. Use SI units: k, M, G, T" 1>&2
+        echo "    -s Specify data partition size. Use SI units: k, M, G, T. Must be integer." 1>&2
         exit 1 
     }
 
-    while getopts ":d:a:s:h" opt # Its cool with a DASH!
+    while getopts ":a:s:h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
             a ) SECTOR_SIZE=$OPTARG ;;
             s ) DATA_SIZE=$OPTARG ;;
             h ) disk::partition::usage ;;
@@ -95,23 +108,16 @@ disk::partition(){
         esac
     done
 
+    shift $((OPTIND - 1))
+    _devlist=$@
 
+    # ToDo: Make check that specified size is int, not float
     # Pre-checks
-    if [ ! $_disk ]; then
+    if [ ! "${_devlist}" ]; then
+        util::err "No disk(s) specified"
         disk::partition::usage
         exit 1
     fi
-
-    if [ ! -e $_disk ]; then
-        echo "No such device: $_disk"
-        exit 1
-    fi
-
-    if [ ! $(echo $_disk | grep dev) ]; then
-        echo "Enter full path to your disk"
-        exit 1
-    fi
-
 
     if ! { [ "$SECTOR_SIZE" = 512 ] || [ "$SECTOR_SIZE" = 4096 ]; }; then
         echo "$SECTOR_SIZE is not a valid sector size, must be 512 or 4096"
@@ -119,37 +125,63 @@ disk::partition(){
     fi
 
 
-    _physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
+    for _disk in ${_devlist}; do
+        if [ ! -e $_disk ]; then
+            echo "No such device: $_disk"
+            exit 1
+        fi
 
-    # Align 4096 on 512 disk is fine, other way around might cause issue, annoy the user anyway
-    if [ "${SECTOR_SIZE}" -ne "${_physical_sector_size}" ]; then
-        util::warn "Disk is reporting physical sector size $_physical_sector_size but you are about to use $SECTOR_SIZE"
-        util::confirm "Continue anyway?" || exit 0
-    fi
+        if [ ! $(echo $_disk | grep dev) ]; then
+            echo "Enter full path to your disk"
+            exit 1
+        fi
 
-    # Round ZFS partition size down to a multiple of 16 MiB (2^24),
-    # leaving units in MiB (2^20) and leave 16 MiB at the end
-    _zfs_size=$(diskinfo ${_disk} | cut -f 3)
-    _zfs_size="$(( (( (_zfs_size >> 24) << 4 )) - 16 ))M"
-    util::info "Maximum recommended data partition size: $_zfs_size"
+        #_physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
+        _physical_sector_size=4096
+        # Align 4096 on 512 disk is fine, other way around might cause issue, annoy the user anyway
+        if [ "${SECTOR_SIZE}" -ne "${_physical_sector_size}" ]; then
+            util::warn "$_disk is reporting physical sector size $_physical_sector_size but you are about to use $SECTOR_SIZE"
+            util::confirm "Continue anyway?" || exit 0
+        fi
 
-    util::confirm "Are you sure you want to write partition table to $_disk?" || exit 0
+    done
 
-    gpart create -s gpt ${_disk}
+    util::confirm "Are you sure you want to write partition table to $_devlist?" || exit 0
 
-    if [ ! -z $DATA_SIZE ]; then # ToDo: Investigate why this throws shell syntax error
-        # Use Specific size
-        _zfs_size="-s $DATA_SIZE"
-        gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk}
-        [ $? -eq 0 ] || gpart show $_disk && util::err "Could not partition correctly. Wrong specified size? Please review table above"
-    else
-        # Use entire disk
-        _zfs_size="-s $_zfs_size"
-        gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk}
-    fi
+    for _disk in ${_devlist}; do
+        disk::wipe::target $_disk
+        printf "Partitioning $_disk"
+        # Round ZFS partition size down to a multiple of 16 MiB (2^24),
+        # leaving units in MiB (2^20) and leave 16 MiB at the end
+        _zfs_size=$(diskinfo ${_disk} | cut -f 3)
+        _zfs_size="$(( (( (_zfs_size >> 24) << 4 )) - 16 ))M"
+    #    util::info "Maximum recommended data partition size: $_zfs_size" # ToDo: Move this to another another command, like "info" with some other good-to-have stuff
 
-    echo "New disk partition layout:"
-    gpart show $_disk
+        gpart create -s gpt ${_disk} > /dev/null 2>&1
+        printf "."
+        if [ ! -z "${DATA_SIZE}" ]; then # ToDo: Investigate why this throws shell syntax error
+            # Use Specific size
+            _zfs_size="-s $DATA_SIZE"
+            printf "."
+            gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk} > /dev/null 2>&1
+            [ $? -eq 0 ] || util::err "Could not partition correctly."
+            printf "."
+        else
+            # Use entire disk
+            _zfs_size="-s $_zfs_size"
+            gpart add -a 4k -b 128 -t freebsd-zfs ${_zfs_size} ${_disk} > /dev/null 2>&1
+            [ $? -eq 0 ] || gpart show $_disk && util::err "Could not partition correctly. Please review table above"
+            printf "."
+        fi
+        printf "done \n"
+    done
+    
+    echo
+    
+    for _disk in ${_devlist}; do
+        echo "New disk partition layout for $_disk:"
+        gpart show $_disk
+    done
 }
 
 
@@ -171,7 +203,7 @@ disk::dummy_boot_code(){
         esac
     done
 
-
+    util::confirm "This is an completely untested feature. Continue?" || exit 0
     # Pre-checks
     if [ ! $_disk ]; then
         disk::dummy_boot_code::usage
