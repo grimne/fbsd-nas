@@ -363,9 +363,8 @@ disk::label(){
     fi
 
     if [ -n "${_custom}" ]; then
-        util::confirm "Write custom label \""${_custom}"\" label to "${_devlist}"?" || exit 0
+        util::confirm "Write custom label \""${_custom}"\" label to $1?" || exit 0
         _label=$_custom
-        _disk="${_devlist}"
        disk::label::target $1 $_label
     fi
 }
