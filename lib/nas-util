@@ -22,7 +22,7 @@ Usage: nas ...
     encrypt disk -k /path/to/master.key /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
     encrypt attach -k /path/to/master.key /dev/diskN1
     zpool list
-    zpool create -n <name> [-t <type>] -d <"[type] /dev/disk1 [diskN ...]">
+    zpool create -n <name> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
     zfs list
     zfs create [-r refquota] [-q quota]
 

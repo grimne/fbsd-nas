@@ -15,7 +15,7 @@ zpool::create(){
     _type=stripe
 
     zpool::create::usage() {
-        echo "Usage: sh $0 -n <newpoolname> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
+        echo "Usage: sh $0 -n <name> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         echo
         echo "    -n Name of new pool" 1>&2
         echo "       Regular zpool syntax" 1>&2
