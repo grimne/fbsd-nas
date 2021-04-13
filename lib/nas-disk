@@ -85,7 +85,6 @@ disk::wipe(){
 
 
 disk::partition(){
-
     disk::partition::usage() { 
         echo "Usage: $0 disk partition [-s <data size>] [-a <4096|512>] /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         echo "    -a Sector size of target. 512 or 4096. Defaults to 4096" 1>&2
@@ -170,6 +169,7 @@ disk::partition(){
 
 
 disk::dummy_boot_code(){
+    # ToDo: Multi disk support if this is ever used...
     disk::dummy_boot_code::usage() { 
         echo "Usage: $0 disk dummyboot -d </dev/diskN>" 1>&2
         exit 1 
@@ -213,7 +213,7 @@ disk::dummy_boot_code(){
 disk::hotswap(){
     disk::hotswap::usage() { 
         # ToDo: Skip the -d option, but only allow one arg
-        echo "Usage: $0 disk hotswap -d </dev/diskN>" 1>&2
+        echo "Usage: $0 disk hotswap /dev/diskN" 1>&2
         exit 1 
     }
     
@@ -230,10 +230,9 @@ disk::hotswap(){
     }
 
 
-    while getopts ":d:h" opt
+    while getopts "h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
             h ) disk::hotswap::usage ;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
             exit ;;
@@ -242,6 +241,7 @@ disk::hotswap(){
         esac
     done
 
+    _disk=$1
 
     # Pre-checks
     if [ ! $_disk ]; then
