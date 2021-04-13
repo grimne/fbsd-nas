@@ -62,7 +62,7 @@ encryption::disk(){
         exit 1 
     }
 
-    while getopts ":d:k:h" opt
+    while getopts ":k:h" opt
     do
         case $opt in
             k ) _master_key=$OPTARG ;;
@@ -132,10 +132,9 @@ encryption::attach(){
         exit 1 
     }
 
-    while getopts ":d:k:h" opt
+    while getopts ":k:h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;; # Emenate
             k ) _master_key=$OPTARG ;;
             h ) encryption::attach::usage;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
