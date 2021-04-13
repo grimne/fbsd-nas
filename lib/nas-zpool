@@ -1,7 +1,11 @@
 #!/bin/sh
 
-# This is stupid...
+# ToDo: Make sure labelclear is run for each device
+# ToDo: Add confirmation with the "-n" dryrun output
+# ToDo: Might do this, if using label, get the dev IDs ie /dev/da4p2 just for confirmation.
+
 zpool::list(){
+    # This is quite stupid...
     zpool list
 }
 
@@ -11,23 +15,21 @@ zpool::create(){
     _type=stripe
 
     zpool::create::usage() {
-        echo "Usage: sh $0 -n <newpoolname> -d </dev/device> [-t <stripe|mirror|raidz1|raidz2|raidz3>]" 1>&2
+        echo "Usage: sh $0 -n <name> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         echo
         echo "    -n Name of new pool" 1>&2
-        echo "    -d Full path to vnodes to be included in pool. If multiple, use quotation!" 1>&2
-        echo "       You can also specify VDEVs. Example:" 1>&2
-        echo "       -d \"mirror /dev/da0 /dev/da1 mirror /dev/da2 /dev/da3\"" 1>&2
-        echo "    -t Pool type, must be stripe, mirror, raidz1, raidz2 or raidz3. Defaults to stripe" 1>&2
+        echo "       Regular zpool syntax" 1>&2
+        echo "       Examples:" 1>&2
+        echo "           mirror /dev/disk1 /dev/disk2 mirror /dev/disk3 /dev/disk4" 1>&2
+        echo "           raidz1 /dev/disk1 /dev/disk2 /dev/disk3" 1>&2
         exit 1 
     }
 
 
-    while getopts ":n:d:t:h" opt
+    while getopts ":n:h" opt
     do
         case $opt in
             n ) _pool_name=$OPTARG ;;
-            d ) _vnode_list=$OPTARG ;;
-            t ) _type=$OPTARG ;;
             h ) zpool::create::usage ;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
             exit ;;
@@ -36,6 +38,9 @@ zpool::create(){
         esac
     done
 
+    shift $((OPTIND - 1))
+    _devlist=$@
+
     # Pre-checks
     if [ ! $_pool_name ]; then
         echo "Pool name is required"
@@ -43,24 +48,15 @@ zpool::create(){
         exit 1
     fi
 
-    if [ -z "${_vnode_list}" ]; then
-        echo "${_vnode_list}"
+    if [ -z "${_devlist}" ]; then
         echo "Vnodes to be included in pool are required"
-        zpool::create::usage
-        exit 1
-    fi
-
-    if ! { [ "$_type" = stripe ] || [ "$_type" = mirror ] || [ "$_type" = raidz1 ] || [ "$_type" = raidz2 ] || [ "$_type" = raidz3 ] ; }
-    then
-        echo "$_type is not a valid pool type"
         zpool::create::usage
         exit 1
     fi
 
     echo "Summary:"
     echo "Pool name: $_pool_name"
-    echo "Pool type: $_type"
-    echo "Device(s): $_vnode_list"
+    echo "Device(s): $_devlist"
 
     util::confirm "Continue?" || exit 0
 
@@ -69,8 +65,9 @@ zpool::create(){
     fi
 
     # The zpool options change depending on FreeBSD version
-    zpool create -o feature@lz4_compress=enabled -o failmode=continue -o autoexpand=on -o feature@async_destroy=enabled -o feature@empty_bpobj=enabled -o feature@multi_vdev_crash_dump=enabled -o feature@spacemap_histogram=enabled -o feature@enabled_txg=enabled -o feature@hole_birth=enabled -o feature@extensible_dataset=enabled -o feature@embedded_data=enabled -o feature@bookmarks=enabled -o feature@filesystem_limits=enabled -o feature@large_blocks=enabled -o feature@large_dnode=enabled -o feature@sha512=enabled -o feature@skein=enabled -o feature@device_removal=enabled -o feature@obsolete_counts=enabled -o feature@zpool_checkpoint=enabled -o feature@spacemap_v2=enabled -o feature@allocation_classes=enabled -O compression=lz4 -O aclinherit=passthrough -O mountpoint=/mnt/$_pool_name -O aclmode=passthrough $_pool_name $_type $_vnode_list > /dev/null 2>&1
+    zpool create -o feature@lz4_compress=enabled -o failmode=continue -o autoexpand=on -o feature@async_destroy=enabled -o feature@empty_bpobj=enabled -o feature@multi_vdev_crash_dump=enabled -o feature@spacemap_histogram=enabled -o feature@enabled_txg=enabled -o feature@hole_birth=enabled -o feature@extensible_dataset=enabled -o feature@embedded_data=enabled -o feature@bookmarks=enabled -o feature@filesystem_limits=enabled -o feature@large_blocks=enabled -o feature@large_dnode=enabled -o feature@sha512=enabled -o feature@skein=enabled -o feature@device_removal=enabled -o feature@obsolete_counts=enabled -o feature@zpool_checkpoint=enabled -o feature@spacemap_v2=enabled -o feature@allocation_classes=enabled -O compression=lz4 -O aclinherit=passthrough -O mountpoint=/mnt/$_pool_name -O aclmode=passthrough $_pool_name $_type $_devlist > /dev/null 2>&1
     [ $? -eq 0 ] || util::err "Unable to create zpool ${_pool_name}"
+    zpool status $_pool_name
 }
 
 

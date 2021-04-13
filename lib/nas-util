@@ -13,16 +13,16 @@ Usage: nas ...
     usage
 
     disk list
-    disk wipe -d </dev/disk>
-    disk partition -d </dev/disk> [-a <4096|512>] [-s <Swap size in GB>]
-    disk label [-s][-u][-c] -d </dev/diskNpY>
+    disk wipe /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
+    disk partition [-s <data size>] [-a <4096|512>] /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
+    disk label [-s][-u][-c] /dev/diskN1pX [/dev/diskN2pX /dev/diskN3pX...]
     disk dummyboot -d </dev/disk>
-    disk hotswap -d </dev/disk>
+    disk hotswap /dev/diskN
     encrypt init -o /path/to/master.key
-    encrypt disk -d </dev/disk> -k /path/to/master.key
-    encrypt attach -d </dev/disk> -k /path/to/master.key
+    encrypt disk -k /path/to/master.key /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
+    encrypt attach -k /path/to/master.key /dev/diskN1
     zpool list
-    zpool create -n <name> [-t <type>] -d <"[type] /dev/disk1 [diskN ...]">
+    zpool create -n <name> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]
     zfs list
     zfs create [-r refquota] [-q quota]
 

@@ -55,15 +55,16 @@ encryption::init(){
 encryption::disk(){
     # Defaults
     _master_key=$_key_out
-    encryption::disk::usage() { 
-        echo "Usage: $0 encrypt disk -d </dev/diskN> -k </path/to/geli/master.key> (Default: $_key_out)" 1>&2
+
+    encryption::disk::usage() {
+        echo "Usage: $0 encrypt disk -k </path/to/geli/master.key> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
+        echo "    Default key location: $_key_out" 1>&2
         exit 1 
     }
 
     while getopts ":d:k:h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
             k ) _master_key=$OPTARG ;;
             h ) encryption::disk::usage ;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
@@ -73,6 +74,9 @@ encryption::disk(){
         esac
     done
 
+    shift $((OPTIND - 1))
+    _devlist=$@
+
     # Pre-checks
     if [ ! $_master_key ]; then
         encryption::disk::usage
@@ -81,33 +85,41 @@ encryption::disk(){
 
     if [ ! -f $_master_key ]
     then
-        echo "No such file: $_master_key"
-        exit 1
+        util::err "No such file: $_master_key"
     fi
 
-    if [ ! $_disk ]; then
-        echo "No disk specified"
-        encryption::disk::usage
-        exit 1
-    fi
+    for _disk in ${_devlist}; do
+        if [ ! $_disk ]; then
+            util::err "No disk specified"
+        fi
 
-    if [ ! -e $_disk ]
-    then
-        echo "No such device: $_disk"
-        encryption::disk::usage
-        exit 1
-    fi
+        if [ ! -e $_disk ]
+        then
+            util::err "No such device: $_disk"
+        fi
 
-    if [ ! $(echo $_disk | grep dev) ]; then
-        echo "Enter full path to your disk"
-        exit 1
-    fi
+        if [ ! $(echo $_disk | grep dev) ]; then
+            util::err "Enter full path to your disk"
+        fi
+    done
 
-    util::confirm "GELI encrypt $_disk?" || exit 0
-    echo "Remember the passphrase entered (twice) below to be able to decrypt your data!"
-    geli init -e AES-XTS -s 4096 -l 256 -B none -K $_master_key $_disk > /dev/null 2>&1
-    [ $? -eq 0 ] || util::err "Could not init geli on $_disk ${_name}"
+    util::confirm "GELI encrypt $_devlist?" || exit 0
+    
+    stty -echo
+    printf "Enter passphrase: "
+    read pass
+    printf "\n"
+    printf "Reenter passphrase: "
+    read pass2
+    stty echo
+    echo
 
+    [ ! $pass == $pass2 ] && util::err "Passwords must match"
+
+    for _disk in ${_devlist}; do
+        echo -n $pass | geli init -e AES-XTS -s 4096 -l 256 -B none -J - -K $_master_key $_disk > /dev/null 2>&1
+        [ $? -eq 0 ] || util::err "Could not init geli on $_disk"
+    done
 }
 
 
@@ -115,15 +127,15 @@ encryption::attach(){
     # Defaults
     _master_key=$_key_out
 
-    encryption::attach::usage() { 
-        echo "Usage: $0 encrypt attach -d </dev/diskN.eli> -k </path/to/geli/master.key>" 1>&2
+    encryption::attach::usage() {
+        echo "Usage: $0 encrypt attach -k </path/to/geli/master.key> /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
         exit 1 
     }
 
     while getopts ":d:k:h" opt
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
+            d ) _disk=$OPTARG ;; # Emenate
             k ) _master_key=$OPTARG ;;
             h ) encryption::attach::usage;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
@@ -132,6 +144,9 @@ encryption::attach(){
             exit ;;
         esac
     done
+
+    shift $((OPTIND - 1))
+    _devlist=$@
 
     # Pre-checks
     if [ ! $_master_key ]; then
@@ -145,23 +160,36 @@ encryption::attach(){
         exit 1
     fi
 
-    if [ ! $_disk ]; then
-        encryption::attach::usage
-        exit 1
-    fi
+    for _disk in ${_devlist}; do 
+        if [ ! $_disk ]; then
+            encryption::attach::usage
+            exit 1
+        fi
 
-    if [ ! -e $_disk ]
-    then
-        echo "No such device: $_disk"
-        encryption::attach::usage
-        exit 1
-    fi
+        if [ ! -e $_disk ]
+        then
+            echo "No such device: $_disk"
+            encryption::attach::usage
+            exit 1
+        fi
 
-    if [ ! $(echo $_disk | grep dev) ]; then
-        echo "Enter full path to your disk"
-        exit 1
-    fi
+        if [ ! $(echo $_disk | grep dev) ]; then
+            echo "Enter full path to your disk"
+            exit 1
+        fi
+    done
 
-    geli attach -k $_master_key $_disk > /dev/null 2>&1
-    [ $? -eq 0 ] || util::err "Could not attach encrypted ${_disk}"
+    stty -echo
+    printf "Enter passphrase: "
+    read pass
+    stty echo
+    echo
+
+    for _disk in ${_devlist}; do 
+        echo -n "$pass" | geli attach -j - -k "$_master_key" "$_disk" > /dev/null 2>&1
+        [ $? -eq 0 ] || util::err "Could not attach encrypted device ${_disk}"
+        if [ -e $_disk.eli ]; then
+            echo "Encrypted devive available: $_disk.eli"
+        fi
+    done
 }
