@@ -85,8 +85,6 @@ disk::wipe(){
 
 
 disk::partition(){
-    # Defaults
-    SECTOR_SIZE=4096
 
     disk::partition::usage() { 
         echo "Usage: $0 disk partition [-s <data size>] [-a <4096|512>] /dev/diskN1 [/dev/diskN2 /dev/diskN3...]" 1>&2
@@ -95,10 +93,9 @@ disk::partition(){
         exit 1 
     }
 
-    while getopts ":a:s:h" opt
+    while getopts ":s:h" opt
     do
         case $opt in
-            a ) SECTOR_SIZE=$OPTARG ;;
             s ) DATA_SIZE=$OPTARG ;;
             h ) disk::partition::usage ;;
             \? ) echo "Invalid option: -$OPTARG. Use -h for usage" >&2
@@ -119,12 +116,6 @@ disk::partition(){
         exit 1
     fi
 
-    if ! { [ "$SECTOR_SIZE" = 512 ] || [ "$SECTOR_SIZE" = 4096 ]; }; then
-        echo "$SECTOR_SIZE is not a valid sector size, must be 512 or 4096"
-        exit 1
-    fi
-
-
     for _disk in ${_devlist}; do
         if [ ! -e $_disk ]; then
             echo "No such device: $_disk"
@@ -136,14 +127,6 @@ disk::partition(){
             exit 1
         fi
 
-        #_physical_sector_size=$(camcontrol identify "${_disk}" | grep "sector\ size" | awk '{print $6}' | cut -d"," -f 1)
-        _physical_sector_size=4096
-        # Align 4096 on 512 disk is fine, other way around might cause issue, annoy the user anyway
-        if [ "${SECTOR_SIZE}" -ne "${_physical_sector_size}" ]; then
-            util::warn "$_disk is reporting physical sector size $_physical_sector_size but you are about to use $SECTOR_SIZE"
-            util::confirm "Continue anyway?" || exit 0
-        fi
-
     done
 
     util::confirm "Are you sure you want to write partition table to $_devlist?" || exit 0
@@ -151,6 +134,7 @@ disk::partition(){
     for _disk in ${_devlist}; do
         disk::wipe::target $_disk
         printf "Partitioning $_disk"
+
         # Round ZFS partition size down to a multiple of 16 MiB (2^24),
         # leaving units in MiB (2^20) and leave 16 MiB at the end
         _zfs_size=$(diskinfo ${_disk} | cut -f 3)
@@ -289,20 +273,32 @@ disk::hotswap(){
 }
 
 
+disk::label::target(){
+    local disk
+    local label
+    
+    disk=$1
+    label=$2
+
+    # Need dev, not part
+    dev=$(basename $disk | sed 's/p[0-9]//g')
+    index=$(basename $disk | sed -n -e 's/^.*p//p')
+    gpart modify -i "${index}" -l "${_label}" "${dev}"
+}
+
+
 disk::label(){
     disk::label::usage() { 
     # ToDo: Add check if "sysctl -n kern.geom.label.disk_ident.enable" is 1, then abort
-    # ToDo: Add support for multiple devices and skip the -d option
-        echo "Usage: $0 disk label [-s][-u][-c] -d </dev/diskNpY>" 1>&2
+        echo "Usage: $0 disk label [-s][-u][-c] /dev/diskN1pX [/dev/diskN2pX /dev/diskN3pX...]" 1>&2
         exit 1 
     }
 
     _i="0"
 
-    while getopts ":d:usc:h" opt # Everybody needs to shower
+    while getopts ":usc:h" opt # Everybody needs to shower
     do
         case $opt in
-            d ) _disk=$OPTARG ;;
             u ) _uuid="yes" && _i=$((_i+1)) ;;
             s ) _sn="yes" && _i=$((_i+1)) ;;
             c ) _custom=$OPTARG && _i=$((_i+1)) ;;
@@ -321,49 +317,55 @@ disk::label(){
         util::err "Specify at least one type of label, -u(uid), -s(erial number) or -c(ustom)"
     fi
 
-    if [ ! $_disk ]; then
-        disk::label::usage
-        exit 1
-    fi
+    shift $((OPTIND - 1))
+    _devlist=$@
 
-    if [ ! -e $_disk ]; then
-        echo "No such device: $_disk"
-        exit 1
-    fi
+    for _disk in ${_devlist}; do
+        if [ ! $_disk ]; then
+            disk::label::usage
+            exit 1
+        fi
 
-    if [ ! $(echo $_disk | grep dev) ]; then
-        echo "Enter full path to your disk"
-        exit 1
-    fi
+        if [ ! -e $_disk ]; then
+            util::err "No such device: $_disk"
+        fi
 
-    if [ ! $(echo $_disk | grep 'p[0-9]\+$') ]; then
-        echo "You must include part/partition. IE /dev/ad4p2"
-        exit 1
-    fi
+        if [ ! $(echo $_disk | grep dev) ]; then
+            util::err "Enter full path to your disk"
+        fi
 
-    _index=$(basename $_disk | sed -n -e 's/^.*p//p')
+        if [ ! $(echo $_disk | grep 'p[0-9]\+$') ]; then
+            util::err "You must include part/partition. IE /dev/ad4p2"
+        fi
+    done    
+
 
     if [ -n "${_uuid}" ]; then
-        _disk=$(basename $_disk)
-        _label=$(gpart list | grep -A 20 ${_disk} | grep rawuuid | sed -n 1p | awk '{print $2}')
-        [ -z $_label ] && util::err "Failed to fetch UUID from ${_disk}"
+        util::confirm "Write UUID label to $_devlist?" || exit 0
+        for _disk in ${_devlist}; do
+            _disk=$(basename $_disk)
+            _label=$(gpart list | grep -A 20 ${_disk} | grep rawuuid | sed -n 1p | awk '{print $2}')
+            [ -z $_label ] && util::err "Failed to fetch UUID from ${_disk}"
+            disk::label::target $_disk $_label
+        done
     fi
 
     if [ -n "${_sn}" ]; then
-        # "diskinfo -s $_disk" might not according to man-page always return serial number:
-        # -s Return the disk ident, usually the serial number
-        _label=$(camcontrol identify ${_disk} | grep 'serial\ number' | cut -d" " -f 11 2>&1)
-        [ $? -eq 0 ] || [ -z $_label ] && util::err "Failed to fetch serial number from ${_disk}"
+        util::info "Consider using \"kern.geom.label.disk_ident.enable=1\""
+        util::confirm "Write S/N label to $_devlist?" || exit 0
+        for _disk in ${_devlist}; do
+            # "diskinfo -s $_disk" might not according to man-page always return serial number:
+            # -s Return the disk ident, usually the serial number
+            _label=$(camcontrol identify ${_disk} | grep 'serial\ number' | cut -d" " -f 11 2>&1)
+            [ $? -eq 0 ] || [ -z $_label ] && util::err "Failed to fetch serial number from ${_disk}"
+            disk::label::target $_disk $_label
+        done
     fi
 
     if [ -n "${_custom}" ]; then
+        util::confirm "Write custom label \""${_custom}"\" label to "${_devlist}"?" || exit 0
         _label=$_custom
+        _disk="${_devlist}"
+       disk::label::target $1 $_label
     fi
-
-    # Need dev, not part
-    _dev=$(basename $_disk | sed 's/p[0-9]//g')
-    
-    util::confirm "Write label "${_label}" to "${_disk}"?" || exit 0
-    gpart modify -i "${_index}" -l "${_label}" "${_dev}" 
-
 }
